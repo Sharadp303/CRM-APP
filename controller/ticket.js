@@ -2,6 +2,7 @@ const User = require("../models/user");
 const Ticket = require("../models/ticket");
 const { ticketStatus, userStatus, userTypes } = require("../utils/constants");
 const user = require("../models/user");
+const sendEmail = require('../utils/notificationClient')
 
 async function createTicket(req, res) {
   const ticketObj = {
@@ -31,6 +32,10 @@ async function createTicket(req, res) {
       //Update the Enginner
       engineer.ticketsAssigned.push(ticket._id);
       await engineer.save();
+      //subject,content,receipientEmails,requester,ticketId
+      sendEmail("Ticket with id:"+ticket._id+"created",
+            ticket.description,user.email+","+engineer.email,
+            user.email,ticket._id)
 
       res.status(201).send(ticket);
     }
@@ -43,11 +48,11 @@ async function createTicket(req, res) {
 async function updateTicket(req, res) {
   const ticket = await Ticket.findOne({ _id: req.params.id });
 
-  const user = await User.findOne({ userId: req.body });
+  const user = await User.findOne({ userId: req.userId });
   // Only the user who created ticket,enginner and admin can update the ticket
   if (
-    ticket.reporter == req.body ||
-    ticket.assignee == req.body ||
+    ticket.reporter == req.userId ||
+    ticket.assignee == req.userId ||
     user.userType == userTypes.admin
   ) {
     ticket.title = req.body.title != undefined ? req.body.title : ticket.title;
@@ -57,6 +62,13 @@ async function updateTicket(req, res) {
     ticket.assignee = req.body.assignee != undefined ? req.body.assignee : ticket.assignee;
 
     await ticket.save();
+     
+    const engineer=await User.findOne({userId:ticket.assignee})
+    const reporter=await User.findOne({userId:ticket.reporter})
+       
+    sendEmail("Ticket with id:"+ticket._id+"updated",
+    ticket.description,user.email+","+engineer.email+","+reporter.email,user.email,ticket._id)
+
     res.status(200).send(ticket)
   } else {
     res.status(400).send({ msg: "You are not authorised to update ticket" });
